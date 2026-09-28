@@ -1,97 +1,344 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>冰冰冰 ❄️</title>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-    />
-    <style>
-      /* 内联样式确保主题色立即生效，避免闪烁 */
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-      }
-      html.light,
-      html.light body {
-        background-color: #ffffff !important;
-        color: #000000;
-      }
-      html.dark,
-      html.dark body {
-        background-color: #1a1a1a !important;
-        color: #ffffff;
-      }
-    </style>
-    <script>
-      // 在 React 加载前立即设置主题，避免闪烁
-      (function () {
-        const isInIframe = window.self !== window.top;
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🧊 冰 · Ice — 冰雪主题交互页面</title>
+<meta name="description" content="以「冰」为主题的纯 HTML/CSS/JS 交互式页面：飘雪、结霜、温度实验与冰川知识。" />
+<style>
+  :root {
+    --ice-1: #eaf7ff;
+    --ice-2: #bfe6ff;
+    --ice-3: #7fd0f7;
+    --ice-4: #38a6e0;
+    --ice-5: #1b6fa8;
+    --deep: #06283d;
+    --deep-2: #0b395c;
+    --glow: rgba(140, 220, 255, .55);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", -apple-system, "Segoe UI", sans-serif;
+    color: var(--ice-1);
+    background: linear-gradient(180deg, #031624 0%, #06283d 40%, #0b395c 100%);
+    overflow-x: hidden;
+  }
+  canvas#snow { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
 
-        function applyThemeToDOM(theme) {
-          document.documentElement.classList.remove("light", "dark");
-          document.documentElement.classList.add(theme);
-          document.documentElement.setAttribute("data-theme", theme);
-        }
+  /* ---------- 通用 ---------- */
+  main { position: relative; z-index: 2; }
+  section { padding: 90px 6vw; max-width: 1100px; margin: 0 auto; }
+  h2.title {
+    font-size: clamp(28px, 4vw, 42px);
+    letter-spacing: .12em;
+    background: linear-gradient(180deg, #fff 20%, var(--ice-3) 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    margin-bottom: 14px;
+  }
+  .subtitle { color: #9fd3ee; margin-bottom: 42px; letter-spacing: .06em; }
+  .glass {
+    background: rgba(190, 235, 255, .07);
+    border: 1px solid rgba(190, 235, 255, .18);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 18px;
+    box-shadow: 0 8px 32px rgba(3, 22, 36, .45), inset 0 1px 0 rgba(255,255,255,.12);
+  }
 
-        if (isInIframe) {
-          // 监听父窗口主动推送的主题消息
-          window.addEventListener("message", function (event) {
-            if (event.data && typeof event.data.theme === "string") {
-              const theme = event.data.theme;
-              if (theme === "light" || theme === "dark") {
-                applyThemeToDOM(theme);
-              }
-            }
-          });
-        } else {
-          // 非 iframe 环境，使用默认 light 主题
-          applyThemeToDOM("light");
-        }
-      })();
-    </script>
-      <script>
-      (function () {
-        if (window.self === window.top) return;
-        var reported = {};
-        window.addEventListener("error", function (event) {
-          // 资源加载失败的 error 事件没有 message，此处仅上报 JS 运行时错误
-          if (!event || !event.message) return;
-          var key =
-            event.message + "|" + (event.filename || "") + "|" + (event.lineno || 0);
-          if (reported[key]) return; // 相同错误只上报一次，避免渲染循环刷屏
-          reported[key] = true;
-          try {
-            window.parent.postMessage(
-              {
-                type: "sandbox-runtime-error",
-                payload: {
-                  message: String(event.message).slice(0, 500),
-                  filename: event.filename || "",
-                  lineno: event.lineno || 0,
-                  colno: event.colno || 0,
-                  stack:
-                    event.error && event.error.stack
-                      ? String(event.error.stack).slice(0, 2000)
-                      : ""
-                }
-              },
-              "*"
-            );
-          } catch (e) {
-            /* 上报失败不影响页面运行 */
-          }
-        });
-      })();
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+  /* ---------- Hero ---------- */
+  header.hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; position: relative; padding: 0 6vw;
+  }
+  .hero h1 {
+    font-size: clamp(56px, 12vw, 150px);
+    font-weight: 900; letter-spacing: .18em;
+    background: linear-gradient(180deg, #ffffff 0%, #cdeeff 35%, #6cc4ef 70%, #2c8ac2 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 26px var(--glow));
+    animation: breathe 5s ease-in-out infinite;
+  }
+  @keyframes breathe { 0%,100% { transform: scale(1);} 50% { transform: scale(1.02);} }
+  .hero .en {
+    margin-top: 10px; font-size: clamp(14px, 2vw, 20px); letter-spacing: .6em;
+    color: #8fd0ef; text-transform: uppercase;
+  }
+  .hero p.desc { margin-top: 26px; color: #bfe6ff; opacity: .85; line-height: 1.9; max-width: 560px; }
+  .big-crystal {
+    position: absolute; width: min(70vmin, 560px); height: min(70vmin, 560px);
+    opacity: .16; z-index: -1; animation: spin 60s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .scroll-hint {
+    position: absolute; bottom: 34px; font-size: 13px; letter-spacing: .3em; color: #7fc4e6;
+    animation: bob 2s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100% { transform: translateY(0);} 50% { transform: translateY(8px);} }
+
+  /* ---------- 温度计实验 ---------- */
+  .lab { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; }
+  .thermo {
+    flex: 0 0 auto; width: 90px; height: 320px; position: relative;
+    display: flex; justify-content: center;
+  }
+  .thermo .tube {
+    width: 26px; height: 100%; border-radius: 13px;
+    background: rgba(255,255,255,.12); border: 1px solid rgba(190,235,255,.3);
+    position: relative; overflow: hidden;
+  }
+  .thermo .mercury {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(180deg, #7fd0f7, #1b6fa8);
+    transition: height 1.2s cubic-bezier(.2,.8,.2,1), background 1.2s;
+    border-radius: 0 0 13px 13px;
+  }
+  .thermo .bulb {
+    position: absolute; bottom: -6px; width: 46px; height: 46px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #bfe6ff, #1b6fa8 70%);
+    border: 1px solid rgba(190,235,255,.4);
+  }
+  .temp-readout { font-size: clamp(40px, 6vw, 64px); font-weight: 800; font-variant-numeric: tabular-nums; }
+  .state-tag {
+    display: inline-block; margin-top: 10px; padding: 6px 18px; border-radius: 999px;
+    font-size: 15px; letter-spacing: .1em; border: 1px solid rgba(190,235,255,.35);
+    background: rgba(190,235,255,.1);
+  }
+  .controls { margin-top: 26px; display: flex; gap: 14px; flex-wrap: wrap; }
+  button.frost-btn {
+    cursor: pointer; border: 1px solid rgba(190,235,255,.4); color: var(--ice-1);
+    background: rgba(190,235,255,.12); padding: 12px 26px; border-radius: 12px;
+    font-size: 16px; letter-spacing: .08em; transition: all .25s;
+    font-family: inherit;
+  }
+  button.frost-btn:hover { background: rgba(190,235,255,.25); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(127,208,247,.25); }
+  button.frost-btn:active { transform: translateY(0) scale(.97); }
+  input[type=range] { width: 240px; accent-color: var(--ice-3); }
+  .lab-text { flex: 1 1 320px; line-height: 2; color: #cfeaff; }
+  .lab-text b { color: #fff; }
+
+  /* ---------- 卡片网格 ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px; }
+  .card { padding: 26px 24px; transition: transform .3s, box-shadow .3s; }
+  .card:hover { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(56,166,224,.22); }
+  .card .icon { font-size: 34px; margin-bottom: 12px; filter: drop-shadow(0 0 10px var(--glow)); }
+  .card h3 { font-size: 19px; color: #fff; margin-bottom: 10px; letter-spacing: .05em; }
+  .card p { font-size: 14.5px; line-height: 1.9; color: #a9d8f2; }
+
+  /* ---------- 结冰过程时间轴 ---------- */
+  .timeline { display: flex; gap: 18px; flex-wrap: wrap; }
+  .step { flex: 1 1 200px; padding: 22px; position: relative; }
+  .step .no { font-size: 13px; color: var(--ice-3); letter-spacing: .3em; margin-bottom: 8px; }
+  .step h4 { color: #fff; margin-bottom: 8px; font-size: 17px; }
+  .step p { font-size: 14px; color: #a9d8f2; line-height: 1.8; }
+  .step .bar { height: 6px; border-radius: 3px; margin-top: 14px; background: linear-gradient(90deg, var(--ice-2), var(--ice-4)); box-shadow: 0 0 12px var(--glow); }
+
+  /* ---------- 诗句 ---------- */
+  blockquote.poem {
+    text-align: center; font-size: clamp(20px, 3vw, 30px); line-height: 2.2;
+    color: #dff2ff; font-weight: 300; letter-spacing: .14em;
+    text-shadow: 0 0 24px rgba(127,208,247,.35);
+  }
+  blockquote.poem cite { display: block; font-size: 14px; color: #7fc4e6; margin-top: 18px; font-style: normal; letter-spacing: .3em; }
+
+  footer {
+    text-align: center; padding: 40px 6vw 60px; color: #6db3d8; font-size: 13px; letter-spacing: .1em;
+    position: relative; z-index: 2;
+  }
+
+  /* 进入动画 */
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity .8s ease, transform .8s ease; }
+  .reveal.show { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+<canvas id="snow"></canvas>
+
+<main>
+  <!-- 首屏 -->
+  <header class="hero">
+    <svg class="big-crystal" viewBox="0 0 200 200" fill="none" stroke="#bfe6ff" stroke-width="2">
+      <g stroke-linecap="round">
+        <line x1="100" y1="10" x2="100" y2="190"/><line x1="22" y1="55" x2="178" y2="145"/><line x1="22" y1="145" x2="178" y2="55"/>
+        <path d="M100 30 l-14 14 M100 30 l14 14 M100 170 l-14 -14 M100 170 l14 -14"/>
+        <path d="M40 62 l4 18 M40 62 l18 -3 M160 138 l-4 -18 M160 138 l-18 3"/>
+        <path d="M40 138 l18 3 M40 138 l4 -18 M160 62 l-18 -3 M160 62 l-4 18"/>
+        <circle cx="100" cy="100" r="10"/>
+      </g>
+    </svg>
+    <h1>冰</h1>
+    <div class="en">Ice &nbsp;·&nbsp; Frost &nbsp;·&nbsp; Snow</div>
+    <p class="desc">水在零度写下的一首诗 —— 凝结、结晶、闪光。<br/>向下滚动，走进一个 −80°C 到 +30°C 的晶莹世界。</p>
+    <div class="scroll-hint">❄ 向下滑动 ❄</div>
+  </header>
+
+  <!-- 温度计实验室 -->
+  <section id="lab" class="reveal">
+    <h2 class="title">🌡️ 结冰实验室</h2>
+    <p class="subtitle">拖动滑块改变温度，观察水的三态变化。</p>
+    <div class="lab glass" style="padding:36px;">
+      <div class="thermo">
+        <div class="tube"><div class="mercury" id="mercury" style="height:60%"></div></div>
+        <div class="bulb"></div>
+      </div>
+      <div class="lab-text">
+        <div class="temp-readout" id="tempText">0°C</div>
+        <div><span class="state-tag" id="stateTag">❄ 冰点 · 冰水共存</span></div>
+        <div class="controls">
+          <input type="range" id="tempSlider" min="-80" max="30" value="0" step="1" />
+        </div>
+        <div class="controls">
+          <button class="frost-btn" id="btnCool">🥶 降温 −10°</button>
+          <button class="frost-btn" id="btnWarm">🔥 升温 +10°</button>
+          <button class="frost-btn" id="btnShake">💥 摇碎冰块</button>
+        </div>
+        <p style="margin-top:18px;" id="labNote">在标准大气压下，<b>0°C</b> 是水与冰的分界线。继续降温，水面会慢慢结出第一层薄冰……</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 冰的知识 -->
+  <section class="reveal">
+    <h2 class="title">🧊 关于冰的一切</h2>
+    <p class="subtitle">那些冷得可爱又冷得认真的事实。</p>
+    <div class="grid">
+      <div class="card glass"><div class="icon">🫧</div><h3>冰比水轻</h3><p>水结冰时体积约膨胀 9%，密度降到 0.917 g/cm³。正因如此，冰浮在水面，水下生命才得以越冬。</p></div>
+      <div class="card glass"><div class="icon">❄️</div><h3>六角魔法</h3><p>水分子以氢键按六方晶系排列，于是每一片雪花都拥有六个瓣——但世界上没有两片完全相同的雪花。</p></div>
+      <div class="card glass"><div class="icon">🧂</div><h3>盐能融冰</h3><p>盐水冰点更低（可达 −21°C）。冬天撒盐除雪，本质是让冰在 0°C 以下也“待不住”。</p></div>
+      <div class="card glass"><div class="icon">🏔️</div><h3>冰川的记忆</h3><p>南极冰盖最深超过 4000 米，封存着数十万年的气泡，是科学家读取古气候的“年轮”。</p></div>
+      <div class="card glass"><div class="icon">💎</div><h3>冰也有 20 多种</h3><p>从常见的 Ih 到高压下的冰 II、冰 VII 甚至超离子冰 X——不同压强下，冰的结构截然不同。</p></div>
+      <div class="card glass"><div class="icon">🌊</div><h3>干冰不是冰</h3><p>−78.5°C 的固态二氧化碳直接升华成气体，不经过液态，因此舞台上的“仙气”其实是白雾水汽。</p></div>
+    </div>
+  </section>
+
+  <!-- 结冰的过程 -->
+  <section class="reveal">
+    <h2 class="title">⏳ 一杯水的结冰日记</h2>
+    <p class="subtitle">从 25°C 到 −18°C，它经历了四个阶段。</p>
+    <div class="timeline">
+      <div class="step glass"><div class="no">STEP 01 · 25°C → 0°C</div><h4>散热降温</h4><p>水不断向环境释放热量，分子运动逐渐放缓，像人群慢慢安静下来。</p><div class="bar" style="width:25%"></div></div>
+      <div class="step glass"><div class="no">STEP 02 · 0°C</div><h4>晶核诞生</h4><p>第一批水分子抱团形成微小冰晶“种子”，过冷水则可能憋到 −5°C 才肯开始。</p><div class="bar" style="width:50%"></div></div>
+      <div class="step glass"><div class="no">STEP 03 · 0°C 恒温</div><h4>凝固放热</h4><p>结冰过程释放潜热（334 J/g），温度停在 0°C 不动，直到全部变成冰。</p><div class="bar" style="width:75%"></div></div>
+      <div class="step glass"><div class="no">STEP 04 · &lt; 0°C</div><h4>继续变冷</h4><p>整块冰的温度才开始下降，表面结霜、内部应力让冰块发出清脆的“冰裂”声。</p><div class="bar" style="width:100%"></div></div>
+    </div>
+  </section>
+
+  <!-- 诗意收尾 -->
+  <section class="reveal" style="text-align:center;">
+    <blockquote class="poem">
+      “千里冰封，万里雪飘。”<br/>
+      —— 毛泽东《沁园春·雪》
+    </blockquote>
+    <div style="margin-top:40px;">
+      <button class="frost-btn" id="btnBlizzard">🌨️ 来一场暴风雪</button>
+    </div>
+  </section>
+</main>
+
+<footer>
+  🧊 ICE THEME · 纯 HTML / CSS / Canvas 实现 · 已部署于 GitHub Pages
+</footer>
+
+<script>
+/* ---------------- 飘雪系统 ---------------- */
+const canvas = document.getElementById('snow');
+const ctx = canvas.getContext('2d');
+let W, H, flakes = [], blizzard = false;
+function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+addEventListener('resize', resize); resize();
+
+function makeFlake(top) {
+  return {
+    x: Math.random() * W,
+    y: top ? -10 : Math.random() * H,
+    r: Math.random() * 3 + 1,
+    vy: Math.random() * 1 + .4,
+    vx: (Math.random() - .5) * .6,
+    a: Math.random() * .6 + .3,
+    sway: Math.random() * Math.PI * 2
+  };
+}
+for (let i = 0; i < 140; i++) flakes.push(makeFlake(false));
+
+function tick(t) {
+  ctx.clearRect(0, 0, W, H);
+  const target = blizzard ? 420 : 140;
+  if (flakes.length < target) for (let k = 0; k < 6; k++) flakes.push(makeFlake(true));
+  if (flakes.length > target) flakes.splice(0, flakes.length - target);
+  for (const f of flakes) {
+    f.sway += .02;
+    f.y += f.vy * (blizzard ? 3 : 1);
+    f.x += f.vx + Math.sin(f.sway) * .6 + (blizzard ? 2.5 : 0);
+    if (f.y > H + 5 || f.x > W + 10) Object.assign(f, makeFlake(true));
+    ctx.globalAlpha = f.a;
+    ctx.fillStyle = '#eaf7ff';
+    ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+document.getElementById('btnBlizzard').onclick = () => {
+  blizzard = !blizzard;
+  document.getElementById('btnBlizzard').textContent = blizzard ? '🌤️ 雪停了' : '🌨️ 来一场暴风雪';
+};
+
+/* ---------------- 温度计实验室 ---------------- */
+const slider = document.getElementById('tempSlider');
+const mercury = document.getElementById('mercury');
+const tempText = document.getElementById('tempText');
+const stateTag = document.getElementById('stateTag');
+const labNote = document.getElementById('labNote');
+
+function setTemp(v) {
+  v = Math.max(-80, Math.min(30, v));
+  slider.value = v;
+  const pct = (v + 80) / 110; // 0..1
+  mercury.style.height = Math.max(6, pct * 100) + '%';
+  tempText.textContent = v + '°C';
+  let tag, note, color;
+  if (v <= -60) { tag = '🥶 极寒 · 干冰都比它暖'; note = '−78.5°C 左右，二氧化碳都会冻成固体！'; color = ['#7fd0f7', '#1b6fa8']; }
+  else if (v < 0) { tag = '🧊 冰的世界'; note = '此时水早已结成坚冰，冰川、霜花、雪花都是这个温度段的杰作。'; color = ['#7fd0f7', '#1b6fa8']; }
+  else if (v === 0) { tag = '❄ 冰点 · 冰水共存'; note = '在标准大气压下，<b>0°C</b> 是水与冰的分界线。继续降温，水面会慢慢结出第一层薄冰……'; color = ['#bfe6ff', '#38a6e0']; }
+  else if (v < 4) { tag = '💧 冷水'; note = '冰开始融化，每融化 1 克冰要吸收约 334 焦耳的热量——这就是冰敷镇痛的原理。'; color = ['#9adcf5', '#2c8ac2']; }
+  else if (v <= 25) { tag = '🌊 液态水'; note = '分子自由滑动，一切如常。别忘了：地球上海洋的平均温度只有约 3.5°C。'; color = ['#9adcf5', '#2c8ac2']; }
+  else { tag = '☀️ 温暖 · 冰已消失'; note = '太热了！在这个温度，任何冰块都会在几分钟内完成“使命”。'; color = ['#ffe2a8', '#e09a38']; }
+  stateTag.textContent = tag;
+  labNote.innerHTML = note;
+  mercury.style.background = 'linear-gradient(180deg,' + color[0] + ',' + color[1] + ')';
+}
+slider.oninput = e => setTemp(+e.target.value);
+document.getElementById('btnCool').onclick = () => setTemp(+slider.value - 10);
+document.getElementById('btnWarm').onclick = () => setTemp(+slider.value + 10);
+document.getElementById('btnShake').onclick = () => {
+  if (+slider.value > 0) { labNote.innerHTML = '💨 空气里只有水蒸气，没有冰可以碎……先把温度降到 0°C 以下吧！'; return; }
+  const box = document.querySelector('.thermo');
+  box.animate([
+    { transform: 'translateX(0)' }, { transform: 'translateX(-6px) rotate(-2deg)' },
+    { transform: 'translateX(6px) rotate(2deg)' }, { transform: 'translateX(-4px)' },
+    { transform: 'translateX(0)' }
+  ], { duration: 400 });
+  for (let i = 0; i < 14; i++) {
+    const sh = document.createElement('div');
+    sh.textContent = ['💎', '❄', '🧊'][i % 3];
+    sh.style.cssText = 'position:fixed;z-index:9;font-size:' + (12 + Math.random() * 14) + 'px;left:' + (box.getBoundingClientRect().left + 20) + 'px;top:' + (box.getBoundingClientRect().top + 40) + 'px;pointer-events:none;transition:all .9s ease-out;';
+    document.body.appendChild(sh);
+    requestAnimationFrame(() => {
+      sh.style.transform = 'translate(' + (Math.random() * 240 - 120) + 'px,' + (Math.random() * 200 - 100) + 'px) rotate(' + (Math.random() * 360) + 'deg)';
+      sh.style.opacity = '0';
+    });
+    setTimeout(() => sh.remove(), 950);
+  }
+};
+setTemp(0);
+
+/* ---------------- 滚动渐入 ---------------- */
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) { e.target.classList.add('show'); io.unobserve(e.target); }
+}), { threshold: .15 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
 </html>
