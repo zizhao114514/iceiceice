@@ -798,7 +798,10 @@ async function runUploadQueue() {
     try {
       setCloudUI('sync', '❄️ 正在上传战绩…');
       const runBefore = await getLatestRunNumber(); // 记住当前最新运行号，用于确认本次合并
-      const payload = JSON.stringify({ ref: 'ice-ice-ice-12fb7', inputs: { scores: btoa(unescape(encodeURIComponent(JSON.stringify(batch)))), reset: batch.filter(r => String(r.g).endsWith(':RESET')).map(r => r.g.slice(0, -6)).join(',') } });
+      const _resets = batch.filter(r => String(r.g).endsWith(':RESET')).map(r => r.g.slice(0, -6)).join(',');
+      const _inputs = { scores: btoa(unescape(encodeURIComponent(JSON.stringify(batch)))) };
+      if (_resets) _inputs.reset = _resets; // 工作流仅声明了 scores；空值字段会被 GitHub 以 422 拒绝
+      const payload = JSON.stringify({ ref: 'ice-ice-ice-12fb7', inputs: _inputs });
       const res = await fetch(DISPATCH_API, {
         method: 'POST',
         headers: ghHdr({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CLOUD_TOKEN_API }),
@@ -820,7 +823,7 @@ async function runUploadQueue() {
         if (await tryHealToken()) { cloudState.failCount = 0; continue; }
       }
       if (String(e.message).startsWith('AUTH_')) {
-        setCloudUI('off', '🚫 上传凭据已失效（token 被撤销/过期）。点右上「🔑 修复凭据」粘贴新令牌立即恢复；成绩暂存本机不受影响，修复后自动补传');
+        setCloudUI('off', '🚫 上传凭据被 GitHub 拒绝（已撤销/过期或访问受限）。点「🔑 修复凭据」粘贴新令牌即可恢复；成绩暂存本机不受影响，修复后自动补传');
         cloudState.queue.unshift(...batch);
         await new Promise(r => setTimeout(r, 30000)); // 凭据问题重试无意义，降频
       } else if (cloudState.failCount >= 3) {
