@@ -410,7 +410,8 @@
       <div class="cloud-bar">
         <span class="cloud-dot off" id="cloudDot"></span>
         <span id="cloudText">正在连接云端…</span>
-        <button class="frost-btn" id="btnCloudRefresh" style="margin-left:auto;padding:8px 16px;font-size:13.5px;">🔄 立即刷新</button>
+        <button class="frost-btn" id="btnTokenFix" title="上传凭据失效时，点此粘贴新令牌立即修复" style="margin-left:auto;padding:8px 16px;font-size:13.5px;">🔑 修复凭据</button>
+        <button class="frost-btn" id="btnCloudRefresh" style="padding:8px 16px;font-size:13.5px;">🔄 立即刷新</button>
       </div>
       <div class="lb-tabs" id="lbTabs"></div>
       <div style="overflow-x:auto;"><table class="lb-table">
@@ -564,22 +565,28 @@ let CLOUD_TOKEN_API = atob('Z2hwX1ZNa09XMUVrTlFHT3k1bndJczR3TXhwdnRCRDc5MjR1UTBT
 try { const savedTk = localStorage.getItem('iceLB_token_b64'); if (savedTk) CLOUD_TOKEN_API = atob(savedTk); } catch (e) {}
 const ghHdr = extra => Object.assign({ 'Accept': 'application/vnd.github+json' }, extra || {});
 // —— 自愈：内置令牌失效时自动探测备用令牌（localStorage → 仓库兜底文件 .lb-token.json） ——
+let lastHealAttempt = 0; // 节流：避免每 30 秒重试都打满 GitHub API 限流
 async function tryHealToken() {
+  if (Date.now() - lastHealAttempt < 120000) return false; // 2 分钟内只探测一轮
+  lastHealAttempt = Date.now();
   setCloudUI('sync', '🔧 正在自动寻找新的上传凭据…');
   let candidates = [];
   try {
     const saved = JSON.parse(localStorage.getItem('iceLB_tokens') || '[]');
     if (Array.isArray(saved)) candidates = saved;
   } catch (e) {}
-  if (!candidates.length) {
-    try {
-      const res = await fetch('https://raw.githubusercontent.com/zizhao114514/iceiceice/ice-ice-ice-12fb7/.lb-token.json?t=' + Date.now(), { cache: 'no-store' });
-      if (res.ok) {
-        const j = await res.json();
-        if (Array.isArray(j.tokens)) { candidates = j.tokens; try { localStorage.setItem('iceLB_tokens', JSON.stringify(candidates)); } catch (e) {} }
+  // —— 云端兜底池：站长把新令牌写入仓库 .lb-token.json 后，所有访客自动热切换 ——
+  // （用 jsDelivr 镜像读取，不受 GitHub raw 匿名限流影响；加时间戳防 CDN 缓存）
+  try {
+    const res = await fetch('https://cdn.jsdelivr.net/gh/zizhao114514/iceiceice@ice-ice-ice-12fb7/.lb-token.json?d=' + Math.floor(Date.now() / 60000), { cache: 'no-store' });
+    if (res.ok) {
+      const j = await res.json();
+      if (Array.isArray(j.tokens)) {
+        for (const t of j.tokens) if (t && !candidates.includes(t)) candidates.push(t);
+        try { localStorage.setItem('iceLB_tokens', JSON.stringify(candidates.slice(0, 5))); } catch (e) {}
       }
-    } catch (e) {}
-  }
+    }
+  } catch (e) {}
   for (const t of candidates) {
     if (!t || t === CLOUD_TOKEN_API) continue;
     try {
@@ -588,11 +595,31 @@ async function tryHealToken() {
       CLOUD_TOKEN_API = t;
       try { localStorage.setItem('iceLB_token_b64', btoa(t)); } catch (e) {}
       setCloudUI('on', '✅ 已自动启用新凭据，继续上传战绩！');
+      cloudState.failCount = 0;
       return true;
     } catch (e) {}
   }
   return false;
 }
+// —— 手动修复入口：状态条旁的「🔑」按钮，粘贴新令牌即可当场恢复（无需懂控制台）——
+(function bindTokenFix() {
+  const btn = document.getElementById('btnTokenFix');
+  if (!btn) return;
+  btn.onclick = async () => {
+    const tk = (prompt('粘贴新的 GitHub 令牌（ghp_ 开头，需 Actions:write + Gist:write）：\n留空则尝试自动重新探测云端备用凭据池') || '').trim();
+    if (tk) {
+      if (!/^gh[pousr]_/.test(tk)) return alert('❌ 令牌格式不对（应以 ghp_ / github_pat_ 等开头）');
+      window.iceSetToken(tk);
+      setCloudUI('sync', '🔑 新凭据已保存，正在重试上传队列…');
+      cloudState.healed = false; cloudState.failCount = 0;
+      setTimeout(() => submitToCloud(':PING', 0), 300); // 触发一次队列冲刷验证
+      return;
+    }
+    cloudState.healed = false;
+    if (await tryHealToken()) { cloudState.failCount = 0; setTimeout(() => submitToCloud(':PING', 0), 300); }
+    else alert('☁️ 暂未找到可用凭据。请站长：\n1) 生成新令牌 https://github.com/settings/tokens\n2) 在上方输入框粘贴，或把令牌写入仓库文件 .lb-token.json\n3) 同时更新仓库 Secret GIST_PAT（合并器写 Gist 用）');
+  };
+})();
 // —— 站长工具：浏览器控制台执行 iceSetToken('新token') 即可热更新本机凭据并登记备用池 ——
 window.iceSetToken = function (tk) {
   if (!/^gh[pousr]_/.test(tk || '')) return console.log('❌ token 格式不对（应以 ghp_ 等开头）');
@@ -752,10 +779,20 @@ async function getLatestRunNumber() {
   } catch (e) { return 0; }
 }
 async function submitToCloud(game, score) {
+  if (game === ':PING') {           // 凭据修复后的队列冲刷信号，本身不是成绩
+    if (!cloudState.flushing && cloudState.queue.length) {
+      cloudState.flushing = true;
+      runUploadQueue();
+    }
+    return;
+  }
   const rec = { g: game, n: playerName(), s: Math.round(score), ts: Date.now() };
   cloudState.queue.push(rec);
   if (cloudState.flushing) return;
   cloudState.flushing = true;
+  runUploadQueue();
+}
+async function runUploadQueue() {
   while (cloudState.queue.length) {
     const batch = cloudState.queue.splice(0, 8);
     try {
@@ -783,11 +820,11 @@ async function submitToCloud(game, score) {
         if (await tryHealToken()) { cloudState.failCount = 0; continue; }
       }
       if (String(e.message).startsWith('AUTH_')) {
-        setCloudUI('off', '🚫 上传凭据已失效（token 被撤销/过期）。站长可在页面控制台执行 iceSetToken(\'新令牌\') 立即修复；成绩暂存本机不受影响');
+        setCloudUI('off', '🚫 上传凭据已失效（token 被撤销/过期）。点右上「🔑 修复凭据」粘贴新令牌立即恢复；成绩暂存本机不受影响，修复后自动补传');
         cloudState.queue.unshift(...batch);
         await new Promise(r => setTimeout(r, 30000)); // 凭据问题重试无意义，降频
       } else if (cloudState.failCount >= 3) {
-        setCloudUI('off', '☁️ 云端暂时不可达，成绩已暂存本机并计入本地榜；恢复后自动补传。站长可在控制台执行 iceSetToken(\'新令牌\') 立即修复上传');
+        setCloudUI('off', '☁️ 云端暂时不可达，成绩已暂存本机并计入本地榜；恢复后自动补传。也可点「🔑 修复凭据」手动更换令牌');
         cloudState.queue.unshift(...batch);
         await new Promise(r => setTimeout(r, 60000)); // 失败退避，防死循环
       } else {
