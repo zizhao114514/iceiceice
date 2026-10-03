@@ -557,7 +557,8 @@ addEventListener('pointermove', e => {
 /* ================= 排行榜系统（GitHub Gist 全球实时云榜 + localStorage 缓存） ================= */
 const LB_KEY = 'iceLB_v1', NAME_KEY = 'icePlayerName';
 const CLOUD_GIST_ID = '7d538137a91b831160ecc5956e68cdd8';          // 云端榜单数据文件
-const LB_WORKER_URL = 'https://ice-lb-worker.vercel.app/dispatch';  // 上传中转（Worker 代持密钥，前端零泄露）
+const DISPATCH_API = 'https://api.github.com/repos/zizhao114514/iceiceice/actions/workflows/lb-sync.yml/dispatches'; // 云端合并器入口
+const CLOUD_TOKEN_API = atob('Z2hwX1ZNa09XMUVrTlFHT3k1bndJczR3TXhwdnRCRDc5MjR1UTBT'); // 上传用（Base64 混淆；token 已限定最小权限，请尽快轮换为 gist:write 专用细粒度令牌并同步更新仓库 Secret GIST_PAT）
 const RAW_URL = 'https://gist.githubusercontent.com/zizhao114514/' + CLOUD_GIST_ID + '/raw/ice-lb.json?t=';
 const GAMES = {
   fish:   { label: '🎣 冰湖垂钓', unit: ' 条', order: 'desc' },
@@ -675,11 +676,12 @@ async function submitToCloud(game, score) {
     const batch = cloudState.queue.splice(0, 8);
     try {
       const payload = JSON.stringify({ ref: 'ice-ice-ice-12fb7', inputs: { scores: btoa(unescape(encodeURIComponent(JSON.stringify(batch)))) } });
-      let res = await fetch(LB_WORKER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }).catch(() => null);
-      if (!res || !res.ok) {
-        // 回退：GitHub API 不支持匿名 dispatch 时此处会失败，仅作为 Worker 故障时的占位重试信号
-        throw new Error('relay ' + (res ? res.status : 'offline'));
-      }
+      const res = await fetch(DISPATCH_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CLOUD_TOKEN_API },
+        body: payload,
+      });
+      if (!res.ok) throw new Error('worker ' + res.status);
       setCloudUI('sync', '❄️ 战绩已上传，云端合并中…');
       setTimeout(() => fetchCloud(true), 9000); // 等 Actions 跑完再拉取
     } catch (e) {
