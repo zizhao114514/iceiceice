@@ -21,9 +21,11 @@ jobs:
       - name: Merge scores into Gist leaderboard
         env:
           SCORES_B64: ${{ github.event.inputs.scores }}
-          GIST_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIST_TOKEN: ${{ secrets.GIST_PAT }}
           GIST_ID: 7d538137a91b831160ecc5956e68cdd8
         run: |
+          set -e
+          if [ -z "$GIST_TOKEN" ]; then echo "ERROR: repo secret GIST_PAT not set"; exit 1; fi
           python3 << 'PYEOF'
           import os, json, base64, time, urllib.request
 
