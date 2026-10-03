@@ -182,6 +182,48 @@
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   }
   .ice-msg.show { opacity: 1; }
+
+  /* ---------- 通用游戏卡片 ---------- */
+  .game-card { padding: 30px; }
+  .gc-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .gc-title { font-size: 20px; color: #fff; letter-spacing: .06em; }
+  .gc-best { font-size: 13.5px; color: #9fd3ee; }
+  .gc-canvas-wrap { position: relative; }
+  .gc-canvas-wrap canvas {
+    display: block; width: min(92vw, 440px); height: auto; border-radius: 14px;
+    border: 1px solid rgba(190,235,255,.3); touch-action: none; cursor: pointer;
+    box-shadow: 0 10px 40px rgba(3,22,36,.6), inset 0 0 60px rgba(127,208,247,.1);
+  }
+  .gc-overlay {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 14px; text-align: center; border-radius: 14px;
+    background: rgba(3,22,36,.62); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+    z-index: 4; color: #dff2ff; font-size: 17px; line-height: 1.8; padding: 20px;
+  }
+  .gc-overlay.show { display: flex; }
+  .gc-hint { margin-top: 14px; font-size: 13.5px; color: #a9d8f2; line-height: 1.9; }
+  .gc-foot { margin-top: 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .gc-score { font-size: 26px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; text-shadow: 0 0 14px var(--glow); }
+  .games-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(470px, 100%), 1fr)); gap: 26px; }
+
+  /* ---------- 排行榜 ---------- */
+  .lb-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+  .lb-tab {
+    cursor: pointer; border: 1px solid rgba(190,235,255,.3); background: rgba(190,235,255,.08);
+    color: #bfe6ff; padding: 9px 20px; border-radius: 999px; font-size: 14.5px; letter-spacing: .06em;
+    transition: all .25s; font-family: inherit;
+  }
+  .lb-tab:hover { background: rgba(190,235,255,.18); }
+  .lb-tab.active { background: linear-gradient(90deg, rgba(127,208,247,.35), rgba(56,166,224,.35)); color: #fff; border-color: rgba(190,235,255,.6); box-shadow: 0 0 16px rgba(127,208,247,.3); }
+  .lb-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .lb-table th { text-align: left; color: #7fc4e6; font-weight: 500; letter-spacing: .12em; font-size: 13px; padding: 10px 14px; border-bottom: 1px solid rgba(190,235,255,.2); }
+  .lb-table td { padding: 12px 14px; border-bottom: 1px dashed rgba(190,235,255,.12); color: #cfeaff; }
+  .lb-table tr:last-child td { border-bottom: none; }
+  .lb-rank { width: 56px; font-size: 18px; }
+  .lb-score { font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+  .lb-you { background: rgba(127,208,247,.12); }
+  .lb-empty { padding: 34px; text-align: center; color: #7fc4e6; letter-spacing: .1em; }
+  .lb-total { margin-top: 18px; font-size: 13.5px; color: #7fc4e6; }
 </style>
 </head>
 <body>
@@ -278,6 +320,95 @@
           <button class="frost-btn" id="btnResetPond">🧊 冻住整个湖面（清档）</button>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- 冰上小游戏合集 -->
+  <section class="reveal">
+    <h2 class="title">⛸️ 冰雪游戏厅</h2>
+    <p class="subtitle">三个新的小游戏，成绩都会自动记入下方排行榜。</p>
+    <div class="games-grid">
+
+      <div class="game-card glass">
+        <div class="gc-head">
+          <div class="gc-title">❄️ 接雪花</div>
+          <div class="gc-best" id="flurryBest">最佳：0</div>
+        </div>
+        <div class="gc-canvas-wrap">
+          <canvas id="flurry" width="440" height="330"></canvas>
+          <div class="gc-overlay show" id="flurryStart">
+            <div>❄️ 用托盘接住飘落的雪花<br/>接到 💎 寒冰晶 ×5 分，碰到 🥶 冰块直接游戏结束！</div>
+            <button class="frost-btn" id="btnFlurryStart">开始游戏</button>
+          </div>
+          <div class="gc-overlay" id="flurryOver">
+            <div id="flurryOverText"></div>
+            <button class="frost-btn" id="btnFlurryAgain">再来一局</button>
+          </div>
+        </div>
+        <div class="gc-hint">操作：移动鼠标 / 手指左右滑动控制托盘。每接 10 片雪花难度提升。</div>
+        <div class="gc-foot"><span class="gc-score"><span id="flurryScore">0</span> 分</span></div>
+      </div>
+
+      <div class="game-card glass">
+        <div class="gc-head">
+          <div class="gc-title">🧊 碎冰速点</div>
+          <div class="gc-best" id="whackBest">最佳：0</div>
+        </div>
+        <div class="gc-canvas-wrap">
+          <canvas id="whack" width="440" height="330"></canvas>
+          <div class="gc-overlay show" id="whackStart">
+            <div>🔨 30 秒内敲碎尽可能多的浮冰！<br/>小心别砸到 ❄️ 雪花精灵——会扣 2 分。</div>
+            <button class="frost-btn" id="btnWhackStart">开始挑战</button>
+          </div>
+          <div class="gc-overlay" id="whackOver">
+            <div id="whackOverText"></div>
+            <button class="frost-btn" id="btnWhackAgain">再来一局</button>
+          </div>
+        </div>
+        <div class="gc-hint">操作：点击/触摸浮冰即可敲碎。手速越快，分数越高。</div>
+        <div class="gc-foot"><span class="gc-score"><span id="whackScore">0</span> 分</span><span style="color:#9fd3ee;" id="whackTime">30s</span></div>
+      </div>
+
+      <div class="game-card glass">
+        <div class="gc-head">
+          <div class="gc-title">🐧 企鹅跳浮冰</div>
+          <div class="gc-best" id="hopBest">最佳：0</div>
+        </div>
+        <div class="gc-canvas-wrap">
+          <canvas id="hop" width="440" height="330"></canvas>
+          <div class="gc-overlay show" id="hopStart">
+            <div>🐧 帮小企鹅在浮冰之间跳跃渡海<br/>按住蓄力、松开起跳——按得越久跳得越远！</div>
+            <button class="frost-btn" id="btnHopStart">出发</button>
+          </div>
+          <div class="gc-overlay" id="hopOver">
+            <div id="hopOverText"></div>
+            <button class="frost-btn" id="btnHopAgain">再试一次</button>
+          </div>
+        </div>
+        <div class="gc-hint">操作：点击并按住（或空格键）蓄力，松开起跳。掉进海里就输啦。</div>
+        <div class="gc-foot"><span class="gc-score">第 <span id="hopScore">0</span> 块冰</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 排行榜 -->
+  <section class="reveal">
+    <h2 class="title">🏆 冰殿排行榜</h2>
+    <p class="subtitle">本机榜单（localStorage）。给你的英雄取个名字，战绩就会署名上榜。</p>
+    <div class="glass" style="padding:30px;">
+      <div class="lb-tabs" id="lbTabs"></div>
+      <div style="overflow-x:auto;"><table class="lb-table">
+        <thead><tr><th class="lb-rank">排名</th><th>玩家</th><th class="lb-score">成绩</th><th>时间</th></tr></thead>
+        <tbody id="lbBody"></tbody>
+      </table></div>
+      <div class="gc-foot" style="margin-top:20px;">
+        <input type="text" id="playerName" maxlength="12" placeholder="你的名字（默认：无名冰客）"
+               style="background:rgba(190,235,255,.1);border:1px solid rgba(190,235,255,.35);border-radius:10px;padding:10px 16px;color:#eaf7ff;font-size:15px;font-family:inherit;width:220px;outline:none;" />
+        <button class="frost-btn" id="btnSaveName">✍️ 署名</button>
+        <button class="frost-btn" id="btnClearBoard">🗑️ 清空本榜</button>
+      </div>
+      <div class="lb-total" id="lbTotal"></div>
     </div>
   </section>
 
@@ -407,6 +538,83 @@ addEventListener('pointermove', e => {
   setTimeout(() => p.remove(), 1150);
 });
 
+/* ================= 排行榜系统（localStorage） ================= */
+const LB_KEY = 'iceLB_v1', NAME_KEY = 'icePlayerName';
+const GAMES = {
+  fish:   { label: '🎣 冰湖垂钓', unit: ' 条', order: 'desc' },
+  flurry: { label: '❄️ 接雪花',   unit: ' 分', order: 'desc' },
+  whack:  { label: '🧊 碎冰速点', unit: ' 分', order: 'desc' },
+  hop:    { label: '🐧 跳浮冰',   unit: ' 块', order: 'desc' },
+};
+let lbData = {};
+try { lbData = JSON.parse(localStorage.getItem(LB_KEY)) || {}; } catch (e) { lbData = {}; }
+for (const k in GAMES) if (!Array.isArray(lbData[k])) lbData[k] = [];
+
+function playerName() {
+  try { return localStorage.getItem(NAME_KEY) || '无名冰客'; } catch (e) { return '无名冰客'; }
+}
+function recordScore(game, score) {
+  if (!(score > 0)) return;
+  const list = lbData[game];
+  list.push({ name: playerName(), score, t: Date.now() });
+  list.sort((a, b) => b.score - a.score);
+  lbData[game] = list.slice(0, 20);
+  try { localStorage.setItem(LB_KEY, JSON.stringify(lbData)); } catch (e) {}
+  renderBoard();
+}
+function fmtTime(t) {
+  const d = new Date(t);
+  const p = n => String(n).padStart(2, '0');
+  return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+const MEDALS = ['🥇', '🥈', '🥉'];
+let curTab = 'fish';
+const lbTabsEl = document.getElementById('lbTabs');
+const lbBodyEl = document.getElementById('lbBody');
+const lbTotalEl = document.getElementById('lbTotal');
+lbTabsEl.innerHTML = Object.keys(GAMES).map(k =>
+  '<button class="lb-tab' + (k === curTab ? ' active' : '') + '" data-g="' + k + '">' + GAMES[k].label + '</button>'
+).join('');
+lbTabsEl.addEventListener('click', e => {
+  const b = e.target.closest('.lb-tab'); if (!b) return;
+  curTab = b.dataset.g;
+  lbTabsEl.querySelectorAll('.lb-tab').forEach(x => x.classList.toggle('active', x.dataset.g === curTab));
+  renderBoard();
+});
+function renderBoard() {
+  const g = GAMES[curTab], list = lbData[curTab] || [];
+  document.getElementById('flurryBest').textContent = '最佳：' + ((lbData.flurry[0] || {}).score || 0) + ' 分';
+  document.getElementById('whackBest').textContent  = '最佳：' + ((lbData.whack[0]  || {}).score || 0) + ' 分';
+  document.getElementById('hopBest').textContent    = '最佳：' + ((lbData.hop[0]    || {}).score || 0) + ' 块';
+  if (!list.length) {
+    lbBodyEl.innerHTML = '<tr><td colspan="4" class="lb-empty">榜单空空如也……快来创造第一条纪录吧！ ❄</td></tr>';
+  } else {
+    lbBodyEl.innerHTML = list.map((r, i) =>
+      '<tr' + (i < 3 ? '' : '') + '>' +
+        '<td class="lb-rank">' + (MEDALS[i] || (i + 1)) + '</td>' +
+        '<td></td><td class="lb-score">' + r.score + g.unit + '</td><td style="color:#7fc4e6;font-size:13px;">' + fmtTime(r.t) + '</td>' +
+      '</tr>'
+    ).join('');
+    list.forEach((r, i) => { lbBodyEl.children[i].children[1].textContent = r.name; });
+  }
+  let total = 0; for (const k in GAMES) total += lbData[k].length;
+  lbTotalEl.textContent = '当前玩家：' + playerName() + ' · 四榜总纪录 ' + total + ' 条（数据保存在你的浏览器本机）';
+}
+document.getElementById('btnSaveName').onclick = () => {
+  const v = document.getElementById('playerName').value.trim().slice(0, 12);
+  if (!v) return alert('先输入名字呀～');
+  try { localStorage.setItem(NAME_KEY, v); } catch (e) {}
+  document.getElementById('playerName').value = '';
+  renderBoard();
+};
+document.getElementById('btnClearBoard').onclick = () => {
+  if (!confirm('确定清空「' + GAMES[curTab].label + '」榜单吗？')) return;
+  lbData[curTab] = [];
+  try { localStorage.setItem(LB_KEY, JSON.stringify(lbData)); } catch (e) {}
+  renderBoard();
+};
+renderBoard();
+
 /* ---------------- 冰湖垂钓小游戏 ---------------- */
 const pond = document.getElementById('pond');
 const pctx = pond.getContext('2d');
@@ -416,6 +624,7 @@ const PW = pond.width, PH = pond.height, ICE_Y = 96;
 let holes = [], catchCount = 0, msgTimer = null;
 try { catchCount = +localStorage.getItem('iceFishCount') || 0; } catch (e) {}
 fishCountEl.textContent = catchCount;
+if (catchCount > 0) recordScore('fish', catchCount); // 老玩家回归，自动挂榜
 
 function showMsg(text, ms = 1800) {
   iceMsgEl.textContent = text;
@@ -496,6 +705,7 @@ function tickPond(t) {
           catchCount += 1;
           fishCountEl.textContent = catchCount;
           try { localStorage.setItem('iceFishCount', catchCount); } catch (e) {}
+          recordScore('fish', catchCount);
         }
         setTimeout(() => { holes = holes.filter(o => o !== h); }, 2600);
       } else {
@@ -513,6 +723,322 @@ document.getElementById('btnResetPond').onclick = () => {
   try { localStorage.removeItem('iceFishCount'); } catch (e) {}
   showMsg('🧊 湖面重新冻住了，渔获清零。');
 };
+
+/* ================= 游戏一：接雪花 ❄️ ================= */
+(function () {
+  const cv = document.getElementById('flurry'), c = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const scoreEl = document.getElementById('flurryScore');
+  const startEl = document.getElementById('flurryStart');
+  const overEl = document.getElementById('flurryOver');
+  const overText = document.getElementById('flurryOverText');
+  const TRAY_Y = H - 34, TRAY_W = 76;
+  let running = false, items = [], score = 0, trayX = W / 2, spawnT = 0, rafId = null;
+
+  function spawn() {
+    const r = Math.random();
+    let type = 'flake';
+    if (r < .16) type = 'ice'; else if (r < .24) type = 'gem';
+    items.push({ x: 20 + Math.random() * (W - 40), y: -18, vy: 1.6 + Math.random() * 1.4 + score / 60,
+                 vx: (Math.random() - .5) * 1.2, sway: Math.random() * 6.28, type });
+  }
+  function drawBg() {
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0b395c'); g.addColorStop(1, '#031624');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.fillStyle = 'rgba(190,235,255,.14)';
+    c.fillRect(0, H - 12, W, 12);
+  }
+  function loop(t) {
+    if (!running) return;
+    rafId = requestAnimationFrame(loop);
+    drawBg();
+    spawnT += 1;
+    const rate = Math.max(22, 55 - Math.floor(score / 10) * 4);
+    if (spawnT > rate) { spawnT = 0; spawn(); }
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      it.sway += .05; it.y += it.vy; it.x += it.vx + Math.sin(it.sway) * .8;
+      if (it.y > TRAY_Y - 8 && it.y < TRAY_Y + 16 && Math.abs(it.x - trayX) < TRAY_W / 2 + 10) {
+        if (it.type === 'ice') { items.splice(i, 1); return gameOver(); }
+        score += it.type === 'gem' ? 5 : 1;
+        scoreEl.textContent = score;
+        items.splice(i, 1); continue;
+      }
+      if (it.y > H + 20) { items.splice(i, 1); continue; }
+      c.font = '22px serif'; c.textAlign = 'center';
+      c.fillText(it.type === 'gem' ? '💎' : it.type === 'ice' ? '🧊' : '❄️', it.x, it.y);
+    }
+    // 托盘（冰晶滑板）
+    c.save();
+    const tg = c.createLinearGradient(trayX - TRAY_W / 2, 0, trayX + TRAY_W / 2, 0);
+    tg.addColorStop(0, '#bfe6ff'); tg.addColorStop(.5, '#7fd0f7'); tg.addColorStop(1, '#bfe6ff');
+    c.fillStyle = tg;
+    c.beginPath(); c.roundRect(trayX - TRAY_W / 2, TRAY_Y, TRAY_W, 12, 6); c.fill();
+    c.shadowColor = 'rgba(140,220,255,.8)'; c.shadowBlur = 14; c.fill();
+    c.restore();
+  }
+  function gameOver() {
+    running = false; cancelAnimationFrame(rafId);
+    recordScore('flurry', score);
+    overText.innerHTML = '被冰块砸中啦！🥶<br/>本局得分：<b style="font-size:30px;">' + score + '</b> 分';
+    overEl.classList.add('show');
+  }
+  function start() {
+    items = []; score = 0; spawnT = 0; scoreEl.textContent = 0;
+    startEl.classList.remove('show'); overEl.classList.remove('show');
+    running = true; rafId = requestAnimationFrame(loop);
+  }
+  cv.addEventListener('pointermove', e => {
+    const rect = cv.getBoundingClientRect();
+    trayX = Math.max(TRAY_W / 2, Math.min(W - TRAY_W / 2, (e.clientX - rect.left) * (W / rect.width)));
+  });
+  document.getElementById('btnFlurryStart').onclick = start;
+  document.getElementById('btnFlurryAgain').onclick = start;
+})();
+
+/* ================= 游戏二：碎冰速点 🧊 ================= */
+(function () {
+  const cv = document.getElementById('whack'), c = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const scoreEl = document.getElementById('whackScore');
+  const timeEl = document.getElementById('whackTime');
+  const startEl = document.getElementById('whackStart');
+  const overEl = document.getElementById('whackOver');
+  const overText = document.getElementById('whackOverText');
+  let running = false, blocks = [], score = 0, endTime = 0, idc = 0, rafId = null, shards = [];
+
+  function spawnBlock() {
+    if (blocks.filter(b => !b.dead).length >= 6) return;
+    const isSpirit = Math.random() < .22;
+    const r = 26 + Math.random() * 10;
+    blocks.push({ id: ++idc, x: r + 10 + Math.random() * (W - 2 * r - 20), y: r + 30 + Math.random() * (H - 2 * r - 50),
+                  r, born: performance.now(), life: isSpirit ? 2600 : 1500 + Math.random() * 900, spirit: isSpirit, dead: false });
+  }
+  function drawWater() {
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0e4a70'); g.addColorStop(1, '#031624');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(190,235,255,.08)'; c.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      c.beginPath();
+      for (let x = 0; x <= W; x += 12) c.lineTo(x, 40 + i * 62 + Math.sin(x / 40 + performance.now() / 900 + i) * 5);
+      c.stroke();
+    }
+  }
+  function loop(t) {
+    if (!running) return;
+    rafId = requestAnimationFrame(loop);
+    drawWater();
+    const left = Math.max(0, Math.ceil((endTime - t) / 1000));
+    timeEl.textContent = left + 's';
+    if (left <= 0) return finish();
+    if (Math.random() < .045) spawnBlock();
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const b = blocks[i];
+      if (t - b.born > b.life) { blocks.splice(i, 1); continue; }
+      const k = Math.min(1, (t - b.born) / 120);
+      const shrink = Math.max(0, 1 - Math.max(0, t - (b.born + b.life - 300)) / 300);
+      const rr = b.r * k * shrink;
+      c.save();
+      if (b.spirit) {
+        c.font = (rr * 1.7) + 'px serif'; c.textAlign = 'center';
+        c.fillText('❄️', b.x, b.y + rr * .55);
+      } else {
+        const bg = c.createRadialGradient(b.x - rr * .3, b.y - rr * .3, rr * .1, b.x, b.y, rr);
+        bg.addColorStop(0, '#eaf7ff'); bg.addColorStop(1, '#5fb6e6');
+        c.fillStyle = bg; c.shadowColor = 'rgba(140,220,255,.6)'; c.shadowBlur = 16;
+        c.beginPath();
+        const n = 6;
+        for (let j = 0; j <= n; j++) {
+          const a = j / n * Math.PI * 2 - Math.PI / 2;
+          const px = b.x + Math.cos(a) * rr, py = b.y + Math.sin(a) * rr * .85;
+          j ? c.lineTo(px, py) : c.moveTo(px, py);
+        }
+        c.closePath(); c.fill();
+        c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 1.5;
+        c.beginPath(); c.moveTo(b.x - rr * .4, b.y - rr * .2); c.lineTo(b.x + rr * .2, b.y + rr * .35); c.stroke();
+      }
+      c.restore();
+    }
+    // 碎冰飞溅
+    for (let i = shards.length - 1; i >= 0; i--) {
+      const s = shards[i];
+      s.x += s.vx; s.y += s.vy; s.vy += .25; s.a -= .04;
+      if (s.a <= 0) { shards.splice(i, 1); continue; }
+      c.globalAlpha = Math.max(0, s.a);
+      c.fillStyle = '#bfe6ff';
+      c.fillRect(s.x, s.y, s.w, s.w);
+      c.globalAlpha = 1;
+    }
+  }
+  function burst(x, y) {
+    for (let i = 0; i < 10; i++)
+      shards.push({ x, y, vx: (Math.random() - .5) * 7, vy: -Math.random() * 5 - 1, w: 2 + Math.random() * 4, a: 1 });
+  }
+  cv.addEventListener('pointerdown', e => {
+    if (!running) return;
+    const rect = cv.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (W / rect.width), y = (e.clientY - rect.top) * (H / rect.height);
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const b = blocks[i];
+      if (Math.hypot(x - b.x, y - b.y) < b.r + 6) {
+        blocks.splice(i, 1);
+        if (b.spirit) { score = Math.max(0, score - 2); }
+        else { score += 1; burst(b.x, b.y); }
+        scoreEl.textContent = score;
+        return;
+      }
+    }
+  });
+  function finish() {
+    running = false; cancelAnimationFrame(rafId);
+    recordScore('whack', score);
+    overText.innerHTML = '⏰ 时间到！<br/>敲碎了 <b style="font-size:30px;">' + score + '</b> 分';
+    overEl.classList.add('show');
+  }
+  function start() {
+    blocks = []; shards = []; score = 0; scoreEl.textContent = 0;
+    startEl.classList.remove('show'); overEl.classList.remove('show');
+    endTime = performance.now() + 30000;
+    running = true; rafId = requestAnimationFrame(loop);
+  }
+  document.getElementById('btnWhackStart').onclick = start;
+  document.getElementById('btnWhackAgain').onclick = start;
+})();
+
+/* ================= 游戏三：企鹅跳浮冰 🐧 ================= */
+(function () {
+  const cv = document.getElementById('hop'), c = cv.getContext('2d');
+  const W = cv.width, H = cv.height, SEA_Y = H - 70;
+  const scoreEl = document.getElementById('hopScore');
+  const startEl = document.getElementById('hopStart');
+  const overEl = document.getElementById('hopOver');
+  const overText = document.getElementById('hopOverText');
+  let running = false, icebergs = [], penguin = null, charging = false, chargeStart = 0, camX = 0, count = 0, rafId = null;
+
+  function makeIceland(x) {
+    return { x, w: 56 + Math.random() * 40 };
+  }
+  function reset() {
+    icebergs = [makeIceland(70)];
+    for (let i = 1; i < 8; i++) icebergs.push(makeIceland(icebergs[i - 1].x + 90 + Math.random() * 70));
+    penguin = { x: 70, y: SEA_Y - 26, vy: 0, flying: false };
+    camX = 0; count = 0; chargeStart = 0; charging = false;
+    scoreEl.textContent = 0;
+  }
+  function drawSea(t) {
+    const g = c.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#dff2ff'); g.addColorStop(.55, '#7fc4e6'); g.addColorStop(.62, '#0e4a70'); g.addColorStop(1, '#031624');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(255,255,255,.5)'; c.lineWidth = 2;
+    c.beginPath();
+    for (let x = 0; x <= W; x += 10) c.lineTo(x, SEA_Y + Math.sin(x / 34 + t / 500) * 3);
+    c.stroke();
+  }
+  function drawFloes(t) {
+    for (const f of icebergs) {
+      const sx = f.x - camX;
+      if (sx < -120 || sx > W + 120) continue;
+      const bob = Math.sin(t / 700 + f.x) * 2;
+      c.save();
+      c.fillStyle = '#eaf7ff';
+      c.strokeStyle = 'rgba(127,208,247,.8)'; c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(sx - f.w / 2, SEA_Y - 6 + bob);
+      c.lineTo(sx - f.w / 2 + 8, SEA_Y - 18 + bob);
+      c.lineTo(sx + f.w / 2 - 6, SEA_Y - 20 + bob);
+      c.lineTo(sx + f.w / 2, SEA_Y - 4 + bob);
+      c.lineTo(sx + f.w / 2 - 10, SEA_Y + 14 + bob);
+      c.lineTo(sx - f.w / 2 + 12, SEA_Y + 12 + bob);
+      c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = 'rgba(127,208,247,.25)';
+      c.fillRect(sx - f.w / 2 + 10, SEA_Y + 6 + bob, f.w - 20, 8);
+      c.restore();
+      f._bob = bob;
+    }
+  }
+  function currentTopY(f) { return SEA_Y - 20 + (f._bob || 0); }
+  function drawPenguin(t) {
+    const sx = penguin.x - camX;
+    c.save();
+    c.translate(sx, penguin.y);
+    if (charging) {
+      const power = Math.min(1, (performance.now() - chargeStart) / 1200);
+      c.fillStyle = 'rgba(3,22,36,.5)';
+      c.fillRect(-20, 26, 40, 6);
+      c.fillStyle = 'hsl(' + (200 - power * 200) + ',90%,60%)';
+      c.fillRect(-20, 26, 40 * power, 6);
+    }
+    c.font = '30px serif'; c.textAlign = 'center';
+    c.fillText('🐧', 0, 8);
+    c.restore();
+  }
+  function loop(t) {
+    if (!running) return;
+    rafId = requestAnimationFrame(loop);
+    drawSea(t);
+    drawFloes(t);
+    // 物理
+    if (penguin.flying) {
+      penguin.vy += .55;
+      penguin.y += penguin.vy;
+      penguin.x += penguin.vx;
+      const land = icebergs.find(f => Math.abs(penguin.x - f.x) < f.w / 2 - 4 && f !== penguin.fromFloe);
+      if (land && penguin.vy > 0 && penguin.y >= currentTopY(land) - 22 && penguin.y < currentTopY(land) + 14) {
+        penguin.flying = false; penguin.y = currentTopY(land) - 22; penguin.landOn = land;
+        if (land !== icebergs[count]) { /* 落在非当前块也算前进 */ }
+        const idx = icebergs.indexOf(land);
+        if (idx >= count) { count = idx + 1; scoreEl.textContent = count; }
+      } else if (penguin.y > SEA_Y + 40) {
+        return splashOut();
+      }
+    } else if (penguin.landOn) {
+      penguin.y = currentTopY(penguin.landOn) - 22;
+    }
+    // 相机跟随
+    const targetCam = Math.max(camX, penguin.x - W * .35);
+    camX += (targetCam - camX) * .08;
+    // 生成前方浮冰
+    const last = icebergs[icebergs.length - 1];
+    if (last.x - camX < W + 200) icebergs.push(makeIceland(last.x + 80 + Math.random() * 90));
+    // 清理身后 & 身后追浪（不淘汰，只裁剪）
+    icebergs = icebergs.filter(f => f.x - camX > -150);
+    drawPenguin(t);
+  }
+  function splashOut() {
+    running = false; cancelAnimationFrame(rafId);
+    recordScore('hop', count);
+    overText.innerHTML = '🌊 扑通！企鹅落水了……<br/>成功跳过 <b style="font-size:30px;">' + count + '</b> 块浮冰';
+    overEl.classList.add('show');
+  }
+  function beginCharge() {
+    if (!running || penguin.flying || charging) return;
+    charging = true; chargeStart = performance.now();
+    penguin.fromFloe = penguin.landOn || icebergs[0];
+  }
+  function releaseCharge() {
+    if (!charging) return;
+    charging = false;
+    const power = Math.min(1, (performance.now() - chargeStart) / 1200);
+    penguin.flying = true;
+    penguin.vx = 3.2 + power * 7.5;
+    penguin.vy = -7.5 - power * 4;
+    penguin.landOn = null;
+  }
+  cv.addEventListener('pointerdown', beginCharge);
+  addEventListener('pointerup', releaseCharge);
+  addEventListener('keydown', e => { if (e.code === 'Space' && running) { e.preventDefault(); beginCharge(); } });
+  addEventListener('keyup', e => { if (e.code === 'Space') releaseCharge(); });
+  function start() {
+    reset();
+    startEl.classList.remove('show'); overEl.classList.remove('show');
+    running = true; rafId = requestAnimationFrame(loop);
+  }
+  document.getElementById('btnHopStart').onclick = start;
+  document.getElementById('btnHopAgain').onclick = start;
+  reset();
+})();
 
 /* ---------------- 滚动渐入 ---------------- */
 const io = new IntersectionObserver(es => es.forEach(e => {
