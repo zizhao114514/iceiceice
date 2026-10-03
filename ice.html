@@ -618,7 +618,8 @@ function renderBoard() {
 }
 
 /* ---------------- 全球实时云榜（GitHub Gist 直连） ---------------- */
-let cloudState = { online: false, lastSync: 0, syncing: false, queue: [], pending: null };
+let cloudState = { online: false, lastSync: 0, syncing: false, queue: [], pending: null, failCount: 0, announced: {} };
+try { cloudState.announced = JSON.parse(localStorage.getItem('iceLB_announced') || '{}'); } catch (e) { cloudState.announced = {}; }
 const cloudDotEl = document.getElementById('cloudDot');
 const cloudTextEl = document.getElementById('cloudText');
 
@@ -626,6 +627,33 @@ function setCloudUI(state, text) {
   if (!cloudDotEl) return;
   cloudDotEl.className = 'cloud-dot ' + state;
   cloudTextEl.textContent = text;
+}
+// —— 上传结果确认：轮询 Actions 运行状态，成功/失败都有明确反馈 ——
+async function confirmUpload(batch, runBefore) {
+  const keyOf = r => r.g + '|' + r.n + '|' + r.s;
+  for (let i = 0; i < 12; i++) { // 最多等 ~96 秒
+    await new Promise(r => setTimeout(r, 8000));
+    try {
+      const res = await fetch('https://api.github.com/repos/zizhao114514/iceiceice/actions/workflows/lb-sync.yml/runs?per_page=3',
+        { headers: { Authorization: 'Bearer ' + CLOUD_TOKEN_API, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+      if (!res.ok) continue;
+      const runs = (await res.json()).workflow_runs || [];
+      const mine = runs.find(r => r.run_number > runBefore);
+      if (!mine) continue;
+      if (mine.status !== 'completed') continue;
+      batch.forEach(rec => { cloudState.announced[keyOf(rec)] = true; });
+      try { localStorage.setItem('iceLB_announced', JSON.stringify(cloudState.announced)); } catch (e) {}
+      if (mine.conclusion === 'success') {
+        setCloudUI('on', '✅ 战绩已登上全球榜！稍候点「🔄 刷新」即可见');
+        cloudState.failCount = 0;
+        fetchCloud(true);
+      } else {
+        setCloudUI('off', '⚠️ 云端合并器执行异常（run #' + mine.run_number + '），请检查仓库 Secrets');
+      }
+      return;
+    } catch (e) { /* 网络抖动，继续轮询 */ }
+  }
+  setCloudUI('sync', '❄️ 云端合并排队中…稍后自动刷新榜单');
 }
 function mergeCloud(remote) {
   // 云端数据与本地缓存取并集，按分数排序各留前 25
@@ -667,6 +695,15 @@ async function fetchCloud(silent) {
   }
 }
 // —— 写入通道：浏览器无法直接 PUT Gist，经由 GitHub Actions Worker 中转 ——
+async function getLatestRunNumber() {
+  try {
+    const res = await fetch('https://api.github.com/repos/zizhao114514/iceiceice/actions/workflows/lb-sync.yml/runs?per_page=1',
+      { headers: { Authorization: 'Bearer ' + CLOUD_TOKEN_API, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+    if (!res.ok) return 0;
+    const runs = (await res.json()).workflow_runs || [];
+    return runs.length ? runs[0].run_number : 0;
+  } catch (e) { return 0; }
+}
 async function submitToCloud(game, score) {
   const rec = { g: game, n: playerName(), s: Math.round(score), ts: Date.now() };
   cloudState.queue.push(rec);
@@ -675,19 +712,37 @@ async function submitToCloud(game, score) {
   while (cloudState.queue.length) {
     const batch = cloudState.queue.splice(0, 8);
     try {
+      setCloudUI('sync', '❄️ 正在上传战绩…');
+      const runBefore = await getLatestRunNumber(); // 记住当前最新运行号，用于确认本次合并
       const payload = JSON.stringify({ ref: 'ice-ice-ice-12fb7', inputs: { scores: btoa(unescape(encodeURIComponent(JSON.stringify(batch)))) } });
       const res = await fetch(DISPATCH_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CLOUD_TOKEN_API },
         body: payload,
       });
-      if (!res.ok) throw new Error('worker ' + res.status);
-      setCloudUI('sync', '❄️ 战绩已上传，云端合并中…');
+      if (res.status === 403 || res.status === 401) {
+        throw new Error('AUTH_' + res.status); // token 失效/被撤销 → 明确提示
+      }
+      if (!res.ok && res.status !== 204) throw new Error('worker ' + res.status);
+      cloudState.failCount = 0;
+      setCloudUI('sync', '❄️ 战绩已上传，云端合并中（约 15~60 秒）…');
+      confirmUpload(batch, runBefore); // 后台轮询确认结果，不阻塞队列
       setTimeout(() => fetchCloud(true), 9000); // 等 Actions 跑完再拉取
     } catch (e) {
-      setCloudUI('off', '☁️ 上传失败，稍后自动重试');
-      cloudState.queue.unshift(...batch);
-      await new Promise(r => setTimeout(r, 3000));
+      cloudState.failCount++;
+      if (String(e.message).startsWith('AUTH_')) {
+        setCloudUI('off', '🚫 上传凭据已失效（token 被撤销/过期），请联系站长更换后刷新页面重试');
+        cloudState.queue.unshift(...batch);
+        await new Promise(r => setTimeout(r, 30000)); // 凭据问题重试无意义，降频
+      } else if (cloudState.failCount >= 3) {
+        setCloudUI('off', '⚠️ 连续上传失败，已暂存本机；成绩仍会计入本地榜，网络恢复后自动补传');
+        cloudState.queue.unshift(...batch);
+        await new Promise(r => setTimeout(r, 60000)); // 失败退避，防死循环
+      } else {
+        setCloudUI('off', '☁️ 上传失败，稍后自动重试（第 ' + cloudState.failCount + ' 次）');
+        cloudState.queue.unshift(...batch);
+        await new Promise(r => setTimeout(r, 3000));
+      }
     }
   }
   cloudState.flushing = false;
