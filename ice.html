@@ -558,7 +558,52 @@ addEventListener('pointermove', e => {
 const LB_KEY = 'iceLB_v1', NAME_KEY = 'icePlayerName';
 const CLOUD_GIST_ID = '7d538137a91b831160ecc5956e68cdd8';          // 云端榜单数据文件
 const DISPATCH_API = 'https://api.github.com/repos/zizhao114514/iceiceice/actions/workflows/lb-sync.yml/dispatches'; // 云端合并器入口
-const CLOUD_TOKEN_API = atob('Z2hwX1ZNa09XMUVrTlFHT3k1bndJczR3TXhwdnRCRDc5MjR1UTBT'); // 上传用（Base64 混淆；token 已限定最小权限，请尽快轮换为 gist:write 专用细粒度令牌并同步更新仓库 Secret GIST_PAT）
+/* ---------------- 云榜凭据管理（Base64 混淆，仅防肉眼；纯静态站的固有权衡） ---------------- */
+const OWNER_API = 'https://api.github.com/repos/zizhao114514/iceiceice/actions/workflows/lb-sync.yml';
+let CLOUD_TOKEN_API = atob('Z2hwX1ZNa09XMUVrTlFHT3k1bndJczR3TXhwdnRCRDc5MjR1UTBT'); // 内置上传令牌
+try { const savedTk = localStorage.getItem('iceLB_token_b64'); if (savedTk) CLOUD_TOKEN_API = atob(savedTk); } catch (e) {}
+const ghHdr = extra => Object.assign({ 'Accept': 'application/vnd.github+json' }, extra || {});
+// —— 自愈：内置令牌失效时自动探测备用令牌（localStorage → 仓库兜底文件 .lb-token.json） ——
+async function tryHealToken() {
+  setCloudUI('sync', '🔧 正在自动寻找新的上传凭据…');
+  let candidates = [];
+  try {
+    const saved = JSON.parse(localStorage.getItem('iceLB_tokens') || '[]');
+    if (Array.isArray(saved)) candidates = saved;
+  } catch (e) {}
+  if (!candidates.length) {
+    try {
+      const res = await fetch('https://raw.githubusercontent.com/zizhao114514/iceiceice/ice-ice-ice-12fb7/.lb-token.json?t=' + Date.now(), { cache: 'no-store' });
+      if (res.ok) {
+        const j = await res.json();
+        if (Array.isArray(j.tokens)) { candidates = j.tokens; try { localStorage.setItem('iceLB_tokens', JSON.stringify(candidates)); } catch (e) {} }
+      }
+    } catch (e) {}
+  }
+  for (const t of candidates) {
+    if (!t || t === CLOUD_TOKEN_API) continue;
+    try {
+      const probe = await fetch(OWNER_API, { headers: ghHdr({ Authorization: 'Bearer ' + t }), cache: 'no-store' });
+      if (probe.status === 401 || probe.status === 403) continue; // 死令牌，跳过
+      CLOUD_TOKEN_API = t;
+      try { localStorage.setItem('iceLB_token_b64', btoa(t)); } catch (e) {}
+      setCloudUI('on', '✅ 已自动启用新凭据，继续上传战绩！');
+      return true;
+    } catch (e) {}
+  }
+  return false;
+}
+// —— 站长工具：浏览器控制台执行 iceSetToken('新token') 即可热更新本机凭据并登记备用池 ——
+window.iceSetToken = function (tk) {
+  if (!/^gh[pousr]_/.test(tk || '')) return console.log('❌ token 格式不对（应以 ghp_ 等开头）');
+  CLOUD_TOKEN_API = tk;
+  try { localStorage.setItem('iceLB_token_b64', btoa(tk)); } catch (e) {}
+  let pool = [];
+  try { pool = JSON.parse(localStorage.getItem('iceLB_tokens') || '[]'); } catch (e) {}
+  if (!pool.includes(tk)) pool.unshift(tk);
+  try { localStorage.setItem('iceLB_tokens', JSON.stringify(pool.slice(0, 5))); } catch (e) {}
+  console.log('✅ 本机凭据已更新。要让其他访客也自动切换，请把同一 token 写入仓库文件 .lb-token.json 并同步 Secret GIST_PAT。');
+};
 const RAW_URL = 'https://gist.githubusercontent.com/zizhao114514/' + CLOUD_GIST_ID + '/raw/ice-lb.json?t=';
 const GAMES = {
   fish:   { label: '🎣 冰湖垂钓', unit: ' 条', order: 'desc' },
@@ -635,7 +680,7 @@ async function confirmUpload(batch, runBefore) {
     await new Promise(r => setTimeout(r, 8000));
     try {
       const res = await fetch('https://api.github.com/repos/zizhao114514/iceiceice/actions/workflows/lb-sync.yml/runs?per_page=3',
-        { headers: { Authorization: 'Bearer ' + CLOUD_TOKEN_API, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+        { headers: ghHdr({ Authorization: 'Bearer ' + CLOUD_TOKEN_API }), cache: 'no-store' });
       if (!res.ok) continue;
       const runs = (await res.json()).workflow_runs || [];
       const mine = runs.find(r => r.run_number > runBefore);
@@ -647,8 +692,10 @@ async function confirmUpload(batch, runBefore) {
         setCloudUI('on', '✅ 战绩已登上全球榜！稍候点「🔄 刷新」即可见');
         cloudState.failCount = 0;
         fetchCloud(true);
+      } else if (mine.conclusion === 'failure') {
+        setCloudUI('off', '⚠️ 云端合并器执行失败（run #' + mine.run_number + '）。常见原因：Secret GIST_PAT 里的令牌已失效——请站长更换令牌后在页面控制台执行 iceSetToken(\'新令牌\')，并同步更新该 Secret');
       } else {
-        setCloudUI('off', '⚠️ 云端合并器执行异常（run #' + mine.run_number + '），请检查仓库 Secrets');
+        setCloudUI('sync', '⏳ 云端合并器已被触发（run #' + mine.run_number + ' · ' + mine.conclusion + '），稍后自动刷新榜单');
       }
       return;
     } catch (e) { /* 网络抖动，继续轮询 */ }
@@ -698,7 +745,7 @@ async function fetchCloud(silent) {
 async function getLatestRunNumber() {
   try {
     const res = await fetch('https://api.github.com/repos/zizhao114514/iceiceice/actions/workflows/lb-sync.yml/runs?per_page=1',
-      { headers: { Authorization: 'Bearer ' + CLOUD_TOKEN_API, Accept: 'application/vnd.github+json' }, cache: 'no-store' });
+      { headers: ghHdr({ Authorization: 'Bearer ' + CLOUD_TOKEN_API }), cache: 'no-store' });
     if (!res.ok) return 0;
     const runs = (await res.json()).workflow_runs || [];
     return runs.length ? runs[0].run_number : 0;
@@ -714,10 +761,10 @@ async function submitToCloud(game, score) {
     try {
       setCloudUI('sync', '❄️ 正在上传战绩…');
       const runBefore = await getLatestRunNumber(); // 记住当前最新运行号，用于确认本次合并
-      const payload = JSON.stringify({ ref: 'ice-ice-ice-12fb7', inputs: { scores: btoa(unescape(encodeURIComponent(JSON.stringify(batch)))) } });
+      const payload = JSON.stringify({ ref: 'ice-ice-ice-12fb7', inputs: { scores: btoa(unescape(encodeURIComponent(JSON.stringify(batch)))), reset: batch.filter(r => String(r.g).endsWith(':RESET')).map(r => r.g.slice(0, -6)).join(',') } });
       const res = await fetch(DISPATCH_API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CLOUD_TOKEN_API },
+        headers: ghHdr({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CLOUD_TOKEN_API }),
         body: payload,
       });
       if (res.status === 403 || res.status === 401) {
@@ -730,12 +777,17 @@ async function submitToCloud(game, score) {
       setTimeout(() => fetchCloud(true), 9000); // 等 Actions 跑完再拉取
     } catch (e) {
       cloudState.failCount++;
+      if (String(e.message).startsWith('AUTH_') && !cloudState.healed) {
+        cloudState.healed = true; // 只自愈一次，避免死循环
+        cloudState.queue.unshift(...batch);
+        if (await tryHealToken()) { cloudState.failCount = 0; continue; }
+      }
       if (String(e.message).startsWith('AUTH_')) {
-        setCloudUI('off', '🚫 上传凭据已失效（token 被撤销/过期），请联系站长更换后刷新页面重试');
+        setCloudUI('off', '🚫 上传凭据已失效（token 被撤销/过期）。站长可在页面控制台执行 iceSetToken(\'新令牌\') 立即修复；成绩暂存本机不受影响');
         cloudState.queue.unshift(...batch);
         await new Promise(r => setTimeout(r, 30000)); // 凭据问题重试无意义，降频
       } else if (cloudState.failCount >= 3) {
-        setCloudUI('off', '⚠️ 连续上传失败，已暂存本机；成绩仍会计入本地榜，网络恢复后自动补传');
+        setCloudUI('off', '☁️ 云端暂时不可达，成绩已暂存本机并计入本地榜；恢复后自动补传。站长可在控制台执行 iceSetToken(\'新令牌\') 立即修复上传');
         cloudState.queue.unshift(...batch);
         await new Promise(r => setTimeout(r, 60000)); // 失败退避，防死循环
       } else {
