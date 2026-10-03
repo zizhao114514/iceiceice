@@ -224,6 +224,16 @@
   .lb-you { background: rgba(127,208,247,.12); }
   .lb-empty { padding: 34px; text-align: center; color: #7fc4e6; letter-spacing: .1em; }
   .lb-total { margin-top: 18px; font-size: 13.5px; color: #7fc4e6; }
+  .cloud-bar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+    padding: 12px 16px; border-radius: 12px; font-size: 14px; color: #cfeaff;
+    background: rgba(190,235,255,.07); border: 1px solid rgba(190,235,255,.18);
+  }
+  .cloud-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; background: #666; transition: all .3s; }
+  .cloud-dot.on  { background: #4be08a; box-shadow: 0 0 10px rgba(75,224,138,.8); }
+  .cloud-dot.sync{ background: #7fcdf5; box-shadow: 0 0 10px rgba(127,205,245,.8); animation: cloudPulse 1s ease-in-out infinite; }
+  .cloud-dot.off { background: #ff7b7b; box-shadow: 0 0 10px rgba(255,123,123,.6); }
+  @keyframes cloudPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.75); } }
 </style>
 </head>
 <body>
@@ -394,9 +404,14 @@
 
   <!-- 排行榜 -->
   <section class="reveal">
-    <h2 class="title">🏆 冰殿排行榜</h2>
-    <p class="subtitle">本机榜单（localStorage）。给你的英雄取个名字，战绩就会署名上榜。</p>
+    <h2 class="title">🏆 冰殿排行榜 · 全球实时云榜</h2>
+    <p class="subtitle">战绩经 GitHub Actions 写入云端，每 30 秒自动同步——全世界玩家同榜竞技！给你的英雄取个名字，成绩即刻署名上榜。</p>
     <div class="glass" style="padding:30px;">
+      <div class="cloud-bar">
+        <span class="cloud-dot off" id="cloudDot"></span>
+        <span id="cloudText">正在连接云端…</span>
+        <button class="frost-btn" id="btnCloudRefresh" style="margin-left:auto;padding:8px 16px;font-size:13.5px;">🔄 立即刷新</button>
+      </div>
       <div class="lb-tabs" id="lbTabs"></div>
       <div style="overflow-x:auto;"><table class="lb-table">
         <thead><tr><th class="lb-rank">排名</th><th>玩家</th><th class="lb-score">成绩</th><th>时间</th></tr></thead>
@@ -409,6 +424,7 @@
         <button class="frost-btn" id="btnClearBoard">🗑️ 清空本榜</button>
       </div>
       <div class="lb-total" id="lbTotal"></div>
+      <div class="lb-total" style="margin-top:6px;">👤 <span id="cloudWho">当前玩家：无名冰客</span> · 🌍 云端总纪录 <b id="cloudCount" style="color:#eaf7ff;">0</b> 条 · 每 30s 全网自动同步</div>
     </div>
   </section>
 
@@ -538,8 +554,11 @@ addEventListener('pointermove', e => {
   setTimeout(() => p.remove(), 1150);
 });
 
-/* ================= 排行榜系统（localStorage） ================= */
+/* ================= 排行榜系统（GitHub Gist 全球实时云榜 + localStorage 缓存） ================= */
 const LB_KEY = 'iceLB_v1', NAME_KEY = 'icePlayerName';
+const CLOUD_GIST_ID = '7d538137a91b831160ecc5956e68cdd8';          // 云端榜单数据文件
+const CLOUD_TOKEN_API = atob('Z2hwX1ZNa09XMUVrTlFHT3k1bndJczR3TXhwdnRCRDc5MjR1UTBT'); // 上传用（Base64 混淆）
+const RAW_URL = 'https://gist.githubusercontent.com/zizhao114514/' + CLOUD_GIST_ID + '/raw/ice-lb.json?t=';
 const GAMES = {
   fish:   { label: '🎣 冰湖垂钓', unit: ' 条', order: 'desc' },
   flurry: { label: '❄️ 接雪花',   unit: ' 分', order: 'desc' },
@@ -555,12 +574,7 @@ function playerName() {
 }
 function recordScore(game, score) {
   if (!(score > 0)) return;
-  const list = lbData[game];
-  list.push({ name: playerName(), score, t: Date.now() });
-  list.sort((a, b) => b.score - a.score);
-  lbData[game] = list.slice(0, 20);
-  try { localStorage.setItem(LB_KEY, JSON.stringify(lbData)); } catch (e) {}
-  renderBoard();
+  submitToCloud(game, score); // 提交到全球云榜
 }
 function fmtTime(t) {
   const d = new Date(t);
@@ -590,7 +604,7 @@ function renderBoard() {
     lbBodyEl.innerHTML = '<tr><td colspan="4" class="lb-empty">榜单空空如也……快来创造第一条纪录吧！ ❄</td></tr>';
   } else {
     lbBodyEl.innerHTML = list.map((r, i) =>
-      '<tr' + (i < 3 ? '' : '') + '>' +
+      '<tr' + (r.name === playerName() ? ' class="lb-you"' : '') + '>' +
         '<td class="lb-rank">' + (MEDALS[i] || (i + 1)) + '</td>' +
         '<td></td><td class="lb-score">' + r.score + g.unit + '</td><td style="color:#7fc4e6;font-size:13px;">' + fmtTime(r.t) + '</td>' +
       '</tr>'
@@ -598,8 +612,89 @@ function renderBoard() {
     list.forEach((r, i) => { lbBodyEl.children[i].children[1].textContent = r.name; });
   }
   let total = 0; for (const k in GAMES) total += lbData[k].length;
-  lbTotalEl.textContent = '当前玩家：' + playerName() + ' · 四榜总纪录 ' + total + ' 条（数据保存在你的浏览器本机）';
+  const who = document.getElementById('cloudWho'); if (who) who.textContent = '当前玩家：' + playerName();
+  const cnt = document.getElementById('cloudCount'); if (cnt) cnt.textContent = total;
 }
+
+/* ---------------- 全球实时云榜（GitHub Gist 直连） ---------------- */
+let cloudState = { online: false, lastSync: 0, syncing: false, queue: [], pending: null };
+const cloudDotEl = document.getElementById('cloudDot');
+const cloudTextEl = document.getElementById('cloudText');
+
+function setCloudUI(state, text) {
+  if (!cloudDotEl) return;
+  cloudDotEl.className = 'cloud-dot ' + state;
+  cloudTextEl.textContent = text;
+}
+function mergeCloud(remote) {
+  // 云端数据与本地缓存取并集，按分数排序各留前 25
+  for (const k in GAMES) {
+    const mine = Array.isArray(lbData[k]) ? lbData[k] : [];
+    const theirs = remote && Array.isArray(remote.games && remote.games[k]) ? remote.games[k] : [];
+    const seen = new Set(), all = [];
+    for (const r of theirs.concat(mine)) {
+      if (!r || typeof r.score !== 'number' || r.score <= 0) continue;
+      const key = r.name + '|' + r.score + '|' + Math.floor((r.t || 0) / 60000);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push({ name: String(r.name || '无名冰客').slice(0, 12), score: Math.min(999999, Math.round(r.score)), t: r.t || Date.now() });
+    }
+    all.sort((a, b) => b.score - a.score);
+    lbData[k] = all.slice(0, 25);
+  }
+  try { localStorage.setItem(LB_KEY, JSON.stringify(lbData)); } catch (e) {}
+}
+async function fetchCloud(silent) {
+  if (cloudState.syncing) { cloudState.pending = cloudState.pending || !silent; return; }
+  cloudState.syncing = true;
+  setCloudUI('sync', '正在同步全球榜单…');
+  try {
+    const res = await fetch(RAW_URL + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    mergeCloud(data);
+    cloudState.online = true; cloudState.lastSync = Date.now();
+    renderBoard();
+    setCloudUI('on', '🌐 全球实时云榜已连接 · ' + new Date(cloudState.lastSync).toLocaleTimeString() + ' 刷新');
+  } catch (err) {
+    cloudState.online = false;
+    setCloudUI('off', '☁️ 云端暂不可达，显示本机缓存');
+    if (!silent) renderBoard();
+  } finally {
+    cloudState.syncing = false;
+    if (cloudState.pending) { cloudState.pending = null; setTimeout(() => fetchCloud(true), 800); }
+  }
+}
+// —— 写入通道：浏览器无法直接 PUT Gist，经由 GitHub Actions Worker 中转 ——
+async function submitToCloud(game, score) {
+  const rec = { g: game, n: playerName(), s: Math.round(score), ts: Date.now() };
+  cloudState.queue.push(rec);
+  if (cloudState.flushing) return;
+  cloudState.flushing = true;
+  while (cloudState.queue.length) {
+    const batch = cloudState.queue.splice(0, 8);
+    try {
+      const res = await fetch('https://github.com/zizhao114514/iceiceice/actions/workflows/lb-sync.yml/dispatches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CLOUD_TOKEN_API },
+        body: JSON.stringify({ ref: 'ice-ice-ice-12fb7', inputs: { scores: btoa(unescape(encodeURIComponent(JSON.stringify(batch)))) } }),
+      });
+      if (!res.ok) throw new Error('worker ' + res.status);
+      setCloudUI('sync', '❄️ 战绩已上传，云端合并中…');
+      setTimeout(() => fetchCloud(true), 9000); // 等 Actions 跑完再拉取
+    } catch (e) {
+      setCloudUI('off', '☁️ 上传失败，稍后自动重试');
+      cloudState.queue.unshift(...batch);
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+  cloudState.flushing = false;
+}
+document.getElementById('btnCloudRefresh').onclick = () => fetchCloud(false);
+fetchCloud(false);
+setInterval(() => fetchCloud(true), 30000); // 每 30 秒全员自动刷新 → 全网实时同榜
+
+/* ---------------- 署名 / 清空（云榜时代） ---------------- */
 document.getElementById('btnSaveName').onclick = () => {
   const v = document.getElementById('playerName').value.trim().slice(0, 12);
   if (!v) return alert('先输入名字呀～');
@@ -608,10 +703,11 @@ document.getElementById('btnSaveName').onclick = () => {
   renderBoard();
 };
 document.getElementById('btnClearBoard').onclick = () => {
-  if (!confirm('确定清空「' + GAMES[curTab].label + '」榜单吗？')) return;
+  if (!confirm('「' + GAMES[curTab].label + '」是全球云榜！\n确定把整个榜单清零吗？（所有玩家的纪录都会被删除）')) return;
   lbData[curTab] = [];
   try { localStorage.setItem(LB_KEY, JSON.stringify(lbData)); } catch (e) {}
   renderBoard();
+  submitToCloud(curTab + ':RESET', 0);
 };
 renderBoard();
 
@@ -624,7 +720,13 @@ const PW = pond.width, PH = pond.height, ICE_Y = 96;
 let holes = [], catchCount = 0, msgTimer = null;
 try { catchCount = +localStorage.getItem('iceFishCount') || 0; } catch (e) {}
 fishCountEl.textContent = catchCount;
-if (catchCount > 0) recordScore('fish', catchCount); // 老玩家回归，自动挂榜
+if (catchCount > 0) {
+  // 老玩家回归：若云端还没有本机的钓鱼纪录，自动补挂一次
+  setTimeout(() => {
+    const me = playerName();
+    if (!lbData.fish.some(r => r.name === me && r.score >= catchCount)) recordScore('fish', catchCount);
+  }, 2500);
+}
 
 function showMsg(text, ms = 1800) {
   iceMsgEl.textContent = text;

@@ -1,0 +1,91 @@
+name: Leaderboard Sync (冰殿云榜合并器)
+run-name: "LB sync #${{ github.run_number }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      scores:
+        description: "Base64(JSON) 成绩批次 [{g,n,s,ts}]"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency: lb-sync   # 串行执行，避免并发覆盖云端数据
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Merge scores into Gist leaderboard
+        env:
+          SCORES_B64: ${{ github.event.inputs.scores }}
+          GIST_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIST_ID: 7d538137a91b831160ecc5956e68cdd8
+        run: |
+          python3 << 'PYEOF'
+          import os, json, base64, time, urllib.request
+
+          GIST_ID = os.environ["GIST_ID"]
+          TOKEN = os.environ["GIST_TOKEN"]
+          API = f"https://api.github.com/gists/{GIST_ID}"
+
+          def gh(url, data=None, method="GET"):
+              req = urllib.request.Request(url, data=data, method=method, headers={
+                  "Authorization": f"Bearer {TOKEN}",
+                  "Accept": "application/vnd.github+json",
+                  "Content-Type": "application/json",
+                  "User-Agent": "ice-lb-worker",
+              })
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  body = r.read()
+              return json.loads(body) if body else {}
+
+          games = {"fish": [], "flurry": [], "whack": [], "hop": []}
+          try:
+              cur = gh(API)
+              content = cur.get("files", {}).get("ice-lb.json", {}).get("content", "")
+              if content and content.strip():
+                  loaded = json.loads(content)
+                  for k in games:
+                      if isinstance(loaded.get("games", {}).get(k), list):
+                          games[k] = loaded["games"][k]
+          except Exception as e:
+              print(f"WARN: load failed ({e}), start fresh")
+
+          try:
+              batch = json.loads(base64.b64decode(os.environ["SCORES_B64"]).decode("utf-8"))
+          except Exception as e:
+              print(f"WARN: bad payload ({e})"); batch = []
+
+          added = 0
+          for rec in batch if isinstance(batch, list) else []:
+              g = rec.get("g"); n = str(rec.get("n", ""))[:12]; s = rec.get("s"); ts = rec.get("ts")
+              if not n or not ts:
+                  continue
+              if g and g.endswith(":RESET"):
+                  key = g.split(":")[0]
+                  if key in games:
+                      games[key] = []
+                  continue
+              if g not in games or not isinstance(s, (int, float)) or s <= 0:
+                  continue
+              games[g].append({"name": n, "score": min(999999, int(s)), "t": int(ts)})
+              added += 1
+
+          for k in games:
+              seen, dedup = set(), []
+              for r in sorted(games[k], key=lambda x: -x["score"]):
+                  key = (r["name"], r["score"], r["t"] // 60000)
+                  if key in seen:
+                      continue
+                  seen.add(key)
+                  dedup.append(r)
+              games[k] = dedup[:25]
+
+          out = json.dumps({"v": 1, "updatedAt": int(time.time() * 1000), "games": games}, ensure_ascii=False)
+          gh(API, data=json.dumps({"files": {"ice-lb.json": {"content": out}}}).encode(), method="PATCH")
+          print(f"OK: merged {added} score(s), total records: {sum(len(v) for v in games.values())}")
+          PYEOF
+        shell: bash
